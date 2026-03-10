@@ -1,3 +1,7 @@
+# NOTE: Written entirely by Claude Code. Be Skeptical. YMMV
+
+
+
 # Slack Exporter
 
 Exports all private Slack channels your bot token is a member of in the [official Slack export format](https://slack.com/help/articles/201658943-Export-your-workspace-data), then packages everything into a ZIP archive.
