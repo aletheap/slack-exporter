@@ -1,0 +1,19 @@
+# Slack export output
+slack_export_*/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Environment variables
+.env

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "slack-exporter",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["/Users/alethea/Documents/Code/Slack_Exporter_written_by_Claude_Code/slack_exporter.py"],
+      "port": 0
+    }
+  ],
+  "autoVerify": false
+}
