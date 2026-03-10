@@ -111,7 +111,7 @@ class SlackExporter:
                 pbar.update(1)
         return users
 
-    def fetch_channels(self, name: str = None):
+    def fetch_channels(self, allowlist: set = None):
         channels = []
         with tqdm(desc="Fetching channels", unit=" ch", leave=True) as pbar:
             for ch in self._paginate(
@@ -121,7 +121,7 @@ class SlackExporter:
                 exclude_archived=False,
                 limit=200,
             ):
-                if name is None or ch["name"] == name:
+                if allowlist is None or ch["name"] in allowlist:
                     channels.append(ch)
                     pbar.update(1)
         return channels
@@ -296,7 +296,7 @@ class SlackExporter:
     # Main export
     # ------------------------------------------------------------------
 
-    def export(self, channel: str = None) -> Path:
+    def export(self, allowlist: set = None) -> Path:
         self.out.mkdir(parents=True, exist_ok=True)
 
         # 1. Users
@@ -310,10 +310,14 @@ class SlackExporter:
             self.download_emoji(emoji)
 
         # 3. Channels + messages
-        channels = self.fetch_channels(name=channel)
-        if channel and not channels:
-            print(f"Error: channel '{channel}' not found or not accessible.")
-            sys.exit(1)
+        channels = self.fetch_channels(allowlist=allowlist)
+        if allowlist:
+            missing = allowlist - {ch["name"] for ch in channels}
+            if missing:
+                tqdm.write(f"    [warn] channels not found or not accessible: {', '.join(sorted(missing))}")
+            if not channels:
+                print("Error: none of the specified channels were found or accessible.")
+                sys.exit(1)
         channels_meta = []
 
         ch_bar = tqdm(channels, desc="Channels", unit=" ch")
@@ -405,9 +409,10 @@ def main():
     )
     parser.add_argument(
         "--channel",
+        nargs="+",
         default=None,
         metavar="NAME",
-        help="Export only the channel with this name (e.g. general)",
+        help="Export only these channels (space-separated, e.g. --channel general engineering)",
     )
     args = parser.parse_args()
 
@@ -441,7 +446,8 @@ def main():
         output_dir=output_dir,
         download_files=not args.no_files,
     )
-    exporter.export(channel=args.channel)
+    allowlist = set(args.channel) if args.channel else None
+    exporter.export(allowlist=allowlist)
 
 
 if __name__ == "__main__":
