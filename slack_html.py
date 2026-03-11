@@ -489,10 +489,10 @@ class SlackHTMLRenderer:
 
     def _avatar_src(self, user_id: str) -> str:
         """Return the src attribute value for an avatar <img>."""
-        avatars_dir = self.export_dir / "avatars"
+        avatars_dir = self.export_dir / "_avatars"
         for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
             if (avatars_dir / f"{user_id}{ext}").exists():
-                return f"../avatars/{user_id}{ext}"
+                return f"../_avatars/{user_id}{ext}"
         return _placeholder_avatar(self._display_name(user_id))
 
     def _display_name(self, user_id: str) -> str:

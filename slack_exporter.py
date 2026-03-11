@@ -259,7 +259,7 @@ class SlackExporter:
             self._download_file(url, dest)
 
     def download_avatars(self, users: list):
-        """Download 72px profile images to avatars/<uid>.<ext> in the output dir."""
+        """Download 72px profile images to _avatars/<uid>.<ext> in the output dir."""
         to_download = [
             (u["id"], (u.get("profile") or {}).get("image_72") or
                       (u.get("profile") or {}).get("image_48") or "")
@@ -269,7 +269,7 @@ class SlackExporter:
                        if url and "default_avatar" not in url]
         if not to_download:
             return
-        avatars_dir = self.out / "avatars"
+        avatars_dir = self.out / "_avatars"
         avatars_dir.mkdir(exist_ok=True)
         bar = tqdm(to_download, desc="Avatars", unit=" avatar", leave=True)
         for uid, url in bar:

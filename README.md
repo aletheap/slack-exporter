@@ -14,7 +14,7 @@ slack_export_YYYYMMDD_HHMMSS/
 ├── users.json
 ├── channels.json
 ├── emoji.json
-├── avatars/
+├── _avatars/
 │   └── <user-id>.png
 ├── __emoji/
 │   └── <name>.<ext>
