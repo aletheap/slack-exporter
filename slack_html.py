@@ -920,7 +920,23 @@ class SlackHTMLRenderer:
             )
 
         channels_html = "\n".join(rows) if rows else "<p>No channels to display.</p>"
-        generated = datetime.now().strftime("%B %d, %Y").replace(" 0", " ")
+
+        # Prefer the timestamp encoded in the export dir name (slack_export_YYYYMMDD_HHMMSS);
+        # fall back to the directory's modification time.
+        m = re.search(r"(\d{8})_(\d{6})", self.export_dir.name)
+        if m:
+            try:
+                dt = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
+            except ValueError:
+                dt = None
+        else:
+            dt = None
+        if dt is None:
+            dt = datetime.fromtimestamp(self.export_dir.stat().st_mtime)
+        try:
+            generated = dt.strftime("%B %-d, %Y")
+        except ValueError:  # Windows
+            generated = dt.strftime("%B %d, %Y").replace(" 0", " ")
 
         return f"""<!DOCTYPE html>
 <html lang="en">
