@@ -10,7 +10,7 @@ into a ZIP archive.
 Required OAuth token scopes:
   channels:read    — list public channels
   channels:history — read public channel message history
-  channels:join    — auto-join public channels to read their history
+  channels:join    — join public channels to read their history
   groups:read      — list private channels the token is a member of
   groups:history   — read private channel message history
   users:read       — fetch workspace user list
@@ -349,51 +349,43 @@ class SlackExporter:
                     )
                     continue
 
-            try:
-                members = self.fetch_members(cid)
-                channels_meta.append(self._format_channel(ch, members))
+            members = self.fetch_members(cid)
+            channels_meta.append(self._format_channel(ch, members))
 
-                # --- messages + thread replies ---
-                messages = self.fetch_history(cid)
+            # --- messages + thread replies ---
+            messages = self.fetch_history(cid)
 
-                seen_ts: set = {m["ts"] for m in messages}
-                thread_parents = [
-                    m for m in messages
-                    if m.get("reply_count", 0) > 0
-                    and m.get("thread_ts") == m.get("ts")
-                ]
-                if thread_parents:
-                    for parent in tqdm(
-                        thread_parents,
-                        desc="  threads",
-                        unit=" thread",
-                        leave=False,
-                    ):
-                        for reply in self.fetch_replies(cid, parent["thread_ts"]):
-                            if reply["ts"] not in seen_ts:
-                                messages.append(reply)
-                                seen_ts.add(reply["ts"])
+            seen_ts: set = {m["ts"] for m in messages}
+            thread_parents = [
+                m for m in messages
+                if m.get("reply_count", 0) > 0
+                and m.get("thread_ts") == m.get("ts")
+            ]
+            if thread_parents:
+                for parent in tqdm(
+                    thread_parents,
+                    desc="  threads",
+                    unit=" thread",
+                    leave=False,
+                ):
+                    for reply in self.fetch_replies(cid, parent["thread_ts"]):
+                        if reply["ts"] not in seen_ts:
+                            messages.append(reply)
+                            seen_ts.add(reply["ts"])
 
-                # Sort all messages (oldest first) before grouping
-                messages.sort(key=lambda m: float(m.get("ts", 0)))
+            # Sort all messages (oldest first) before grouping
+            messages.sort(key=lambda m: float(m.get("ts", 0)))
 
-                # --- download attachments (patches local_path into message dicts) ---
-                ch_dir = self.out / name
-                ch_dir.mkdir(exist_ok=True)
-                if self.download_files:
-                    self.download_channel_files(messages, ch_dir)
+            # --- download attachments (patches local_path into message dicts) ---
+            ch_dir = self.out / name
+            ch_dir.mkdir(exist_ok=True)
+            if self.download_files:
+                self.download_channel_files(messages, ch_dir)
 
-                # --- write daily files (local_path fields already set above) ---
-                by_day = self._group_by_day(messages)
-                for day, day_msgs in by_day.items():
-                    self._write_json(ch_dir / f"{day}.json", day_msgs)
-
-            finally:
-                if auto_joined:
-                    try:
-                        self._call("conversations_leave", channel=cid)
-                    except SlackApiError:
-                        pass
+            # --- write daily files (local_path fields already set above) ---
+            by_day = self._group_by_day(messages)
+            for day, day_msgs in by_day.items():
+                self._write_json(ch_dir / f"{day}.json", day_msgs)
 
         self._write_json(self.out / "channels.json", channels_meta)
 
@@ -476,7 +468,7 @@ def main():
             "Required OAuth scopes:\n"
             "  channels:read    – list public channels\n"
             "  channels:history – read public channel message history\n"
-            "  channels:join    – auto-join public channels to read their history\n"
+            "  channels:join    – join public channels to read their history\n"
             "  groups:read      – list private channels the token is a member of\n"
             "  groups:history   – read private channel message history\n"
             "  users:read       – fetch user list\n"

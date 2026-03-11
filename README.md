@@ -39,7 +39,7 @@ Create a [Slack app](https://api.slack.com/apps) and add a bot token with these 
 |-------|---------|
 | `channels:read` | List public channels |
 | `channels:history` | Read public channel message history |
-| `channels:join` | Auto-join public channels to read their history (bot leaves after export) |
+| `channels:join` | Join public channels to read their history |
 | `groups:read` | List private channels the bot is a member of |
 | `groups:history` | Read private channel message history |
 | `users:read` | Fetch workspace user list |
