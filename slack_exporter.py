@@ -133,18 +133,20 @@ class SlackExporter:
                 pbar.update(1)
         return channels
 
-    def fetch_members(self, channel_id: str):
+    def fetch_members(self, channel_id: str, channel_name: str = ""):
+        prefix = f"#{channel_name}: " if channel_name else ""
         try:
             return list(self._paginate(
                 "conversations_members", "members",
                 channel=channel_id, limit=200,
             ))
         except SlackApiError as exc:
-            tqdm.write(f"    [warn] could not fetch members: {exc.response['error']}")
+            tqdm.write(f"    [warn] {prefix}could not fetch members: {exc.response['error']}")
             return []
 
-    def fetch_history(self, channel_id: str):
+    def fetch_history(self, channel_id: str, channel_name: str = ""):
         """Return all messages in a channel (oldest first)."""
+        prefix = f"#{channel_name}: " if channel_name else ""
         messages = []
         try:
             with tqdm(desc="  messages", unit=" msg", leave=False) as pbar:
@@ -155,16 +157,17 @@ class SlackExporter:
                     messages.append(msg)
                     pbar.update(1)
         except SlackApiError as exc:
-            tqdm.write(f"    [warn] could not read history: {exc.response['error']}")
+            tqdm.write(f"    [warn] {prefix}could not read history: {exc.response['error']}")
         # conversations_history returns newest-first; reverse to oldest-first
         messages.reverse()
         return messages
 
-    def fetch_replies(self, channel_id: str, thread_ts: str):
+    def fetch_replies(self, channel_id: str, thread_ts: str, channel_name: str = ""):
         """
         Return reply messages for a thread (excludes the parent message
         so it is not duplicated in the output).
         """
+        prefix = f"#{channel_name}: " if channel_name else ""
         try:
             gen = self._paginate(
                 "conversations_replies", "messages",
@@ -173,7 +176,7 @@ class SlackExporter:
             next(gen, None)  # skip parent message (always first item on page 1)
             return list(gen)
         except SlackApiError as exc:
-            tqdm.write(f"    [warn] thread {thread_ts}: {exc.response['error']}")
+            tqdm.write(f"    [warn] {prefix}thread {thread_ts}: {exc.response['error']}")
             return []
 
     # ------------------------------------------------------------------
@@ -368,11 +371,11 @@ class SlackExporter:
                     continue
 
             try:
-                members = self.fetch_members(cid)
+                members = self.fetch_members(cid, name)
                 channels_meta.append(self._format_channel(ch, members))
 
                 # --- messages + thread replies ---
-                messages = self.fetch_history(cid)
+                messages = self.fetch_history(cid, name)
 
                 seen_ts: set = {m["ts"] for m in messages}
                 thread_parents = [
@@ -387,7 +390,7 @@ class SlackExporter:
                         unit=" thread",
                         leave=False,
                     ):
-                        for reply in self.fetch_replies(cid, parent["thread_ts"]):
+                        for reply in self.fetch_replies(cid, parent["thread_ts"], name):
                             if reply["ts"] not in seen_ts:
                                 messages.append(reply)
                                 seen_ts.add(reply["ts"])
