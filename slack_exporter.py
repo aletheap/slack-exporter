@@ -352,7 +352,13 @@ class SlackExporter:
             if not channels:
                 print("Error: none of the specified channels were found or accessible.")
                 sys.exit(1)
+        # Write a preliminary channels.json before the export loop so the file
+        # exists and is readable even if the run is interrupted.  Members are
+        # not yet known, so they are left as empty lists; the file is
+        # overwritten with full member data once all channels are processed.
         channels_meta = []
+        self._write_json(self.out / "channels.json",
+                         [self._format_channel(ch, []) for ch in channels])
 
         ch_bar = tqdm(sorted(channels, key=lambda c: c["name"]), desc="Channels", unit=" ch")
         for ch in ch_bar:
