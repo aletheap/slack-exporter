@@ -334,14 +334,16 @@ class SlackExporter:
             was_member = ch.get("is_member", True)
             ch_bar.set_postfix_str(f"#{name}")
 
-            # Auto-join public channels the bot isn't already in so we can
-            # read their history.  We leave again afterwards to avoid leaving
-            # a permanent footprint in every channel.
-            auto_joined = False
-            if is_public and not was_member:
+            is_archived = ch.get("is_archived", False)
+
+            # Join public channels the bot isn't already in.
+            # Archived channels can't be joined via the API, so we skip the
+            # join step and attempt to read their history directly — the
+            # channels:history scope allows reading archived public channel
+            # history without membership.
+            if is_public and not was_member and not is_archived:
                 try:
                     self._call("conversations_join", channel=cid)
-                    auto_joined = True
                 except SlackApiError as exc:
                     tqdm.write(
                         f"    [warn] could not join #{name} "
