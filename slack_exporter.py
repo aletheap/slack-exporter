@@ -329,7 +329,7 @@ class SlackExporter:
                 sys.exit(1)
         channels_meta = []
 
-        ch_bar = tqdm(channels, desc="Channels", unit=" ch")
+        ch_bar = tqdm(sorted(channels, key=lambda c: c["name"]), desc="Channels", unit=" ch")
         for ch in ch_bar:
             cid = ch["id"]
             name = ch["name"]
