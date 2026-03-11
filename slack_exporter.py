@@ -293,6 +293,7 @@ class SlackExporter:
             "creator": channel.get("creator"),
             "is_archived": channel.get("is_archived", False),
             "is_general": channel.get("is_general", False),
+            "is_private": channel.get("is_private", False),
             "members": members,
             "topic": channel.get("topic", blank_set),
             "purpose": channel.get("purpose", blank_set),
@@ -411,8 +412,12 @@ class SlackExporter:
             messages.sort(key=lambda m: float(m.get("ts", 0)))
 
             # --- download attachments (patches local_path into message dicts) ---
-            ch_dir = self.out / name
-            ch_dir.mkdir(exist_ok=True)
+            is_private = ch.get("is_private", False)
+            if is_private:
+                ch_dir = self.out / "_private_channels" / name
+            else:
+                ch_dir = self.out / name
+            ch_dir.mkdir(parents=True, exist_ok=True)
             if self.download_files:
                 self.download_channel_files(messages, ch_dir)
 
@@ -470,9 +475,9 @@ def main():
         help="Skip downloading file attachments (images, videos, PDFs, etc.)",
     )
     parser.add_argument(
-        "--html",
+        "--no-html",
         action="store_true",
-        help="Generate a browsable HTML viewer after the export completes",
+        help="Skip generating the browsable HTML viewer after export",
     )
     parser.add_argument(
         "--no-avatars",
@@ -550,7 +555,7 @@ def main():
     denylist = set(args.skip_channel) if args.skip_channel else None
     exporter.export(allowlist=allowlist, denylist=denylist)
 
-    if args.html:
+    if not args.no_html:
         try:
             from slack_html import SlackHTMLRenderer
         except ImportError:
@@ -560,7 +565,7 @@ def main():
                 export_dir=exporter.out,
             )
             renderer.render()
-            print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")
+            print(f"  HTML      : {exporter.out / '_html' / 'index.html'}")
 
 
 if __name__ == "__main__":

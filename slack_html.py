@@ -443,7 +443,7 @@ class SlackHTMLRenderer:
     ):
         self.export_dir = Path(export_dir)
         self.channel_filter = channel_filter
-        self.html_dir = self.export_dir / "html"
+        self.html_dir = self.export_dir / "_html"
 
         self.users: dict = {}    # uid → user object
         self.channels: list = []
@@ -469,9 +469,13 @@ class SlackHTMLRenderer:
             with open(path, encoding="utf-8") as f:
                 self.emoji = json.load(f)
 
-    def load_channel_messages(self, channel_name: str) -> list:
+    def load_channel_messages(self, channel_name: str, is_private: bool = False) -> list:
         """Read all daily JSON files for a channel, sorted by ts."""
-        ch_dir = self.export_dir / channel_name
+        ch_dir = (
+            self.export_dir / "_private_channels" / channel_name
+            if is_private
+            else self.export_dir / channel_name
+        )
         messages = []
         for json_file in sorted(ch_dir.glob("????-??-??.json")):
             with open(json_file, encoding="utf-8") as f:
@@ -694,7 +698,7 @@ class SlackHTMLRenderer:
             )
         return f'<div class="reactions">{"".join(parts)}</div>'
 
-    def _render_files(self, files: list, channel_name: str) -> str:
+    def _render_files(self, files: list, channel_name: str, is_private: bool = False) -> str:
         if not files:
             return ""
         IMAGE_TYPES = {
@@ -711,8 +715,13 @@ class SlackHTMLRenderer:
             local_path = f.get("local_path")
 
             if local_path:
-                # Path from html/<channel>.html → ../<channel>/_files/<file>
-                src = f"../{html.escape(channel_name)}/{html.escape(local_path)}"
+                # Path from _html/<channel>.html → ../<channel-dir>/_files/<file>
+                ch_dir = (
+                    f"_private_channels/{html.escape(channel_name)}"
+                    if is_private
+                    else html.escape(channel_name)
+                )
+                src = f"../{ch_dir}/{html.escape(local_path)}"
                 href = src
             else:
                 url = f.get("url_private") or ""
@@ -780,7 +789,7 @@ class SlackHTMLRenderer:
                 )
         return "\n".join(parts)
 
-    def render_message(self, msg: dict, channel_name: str, is_reply: bool = False) -> str:
+    def render_message(self, msg: dict, channel_name: str, is_reply: bool = False, is_private: bool = False) -> str:
         subtype = msg.get("subtype", "")
         ts = msg.get("ts", "")
         display_ts, iso_ts = self._format_ts(ts)
@@ -811,7 +820,7 @@ class SlackHTMLRenderer:
             text = _extract_blocks_text(msg["blocks"])
         rendered_text = self.render_mrkdwn(text)
 
-        files_html = self._render_files(msg.get("files", []), channel_name)
+        files_html = self._render_files(msg.get("files", []), channel_name, is_private)
         reactions_html = self._render_reactions(msg.get("reactions", []))
         attachments_html = self._render_attachments(msg.get("attachments", []))
 
@@ -837,14 +846,14 @@ class SlackHTMLRenderer:
             f'</div>\n'
         )
 
-    def _render_thread(self, parent: dict, replies: list, channel_name: str) -> str:
+    def _render_thread(self, parent: dict, replies: list, channel_name: str, is_private: bool = False) -> str:
         if not replies:
             return ""
         count = len(replies)
         word = "reply" if count == 1 else "replies"
         thread_id = f"thread-{parent['ts'].replace('.', '-')}"
         replies_html = "".join(
-            self.render_message(r, channel_name, is_reply=True) for r in replies
+            self.render_message(r, channel_name, is_reply=True, is_private=is_private) for r in replies
         )
         return (
             f'<button class="thread-toggle"'
@@ -939,6 +948,7 @@ function toggleTheme() {{
         name = channel.get("name", "unknown")
         topic = channel.get("topic", {}).get("value", "") or ""
         is_archived = channel.get("is_archived", False)
+        is_private = channel.get("is_private", False)
 
         top_level, replies_by_ts = self._build_thread_map(messages)
 
@@ -960,11 +970,11 @@ function toggleTheme() {{
                 f'<div class="day-separator"><span>{html.escape(label)}</span></div>\n'
             )
             for msg in by_day[day_key]:
-                body_parts.append(self.render_message(msg, name))
+                body_parts.append(self.render_message(msg, name, is_private=is_private))
                 ts = msg.get("ts", "")
                 if ts in replies_by_ts:
                     body_parts.append(
-                        self._render_thread(msg, replies_by_ts[ts], name)
+                        self._render_thread(msg, replies_by_ts[ts], name, is_private)
                     )
 
         messages_html = "".join(body_parts) if body_parts else "<p>No messages.</p>"
@@ -1461,8 +1471,9 @@ img.emoji { width: 20px; height: 20px; vertical-align: -4px; display: inline; }
         bar = tqdm(channels_to_render, desc="Rendering channels", unit=" ch")
         for ch in bar:
             name = ch.get("name", "unknown")
+            is_private = ch.get("is_private", False)
             bar.set_postfix_str(f"#{name}")
-            messages = self.load_channel_messages(name)
+            messages = self.load_channel_messages(name, is_private=is_private)
             html_content = self.render_channel_page(ch, messages)
             (self.html_dir / f"{name}.html").write_text(html_content, encoding="utf-8")
 
