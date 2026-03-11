@@ -2,12 +2,14 @@
 """
 Slack Workspace Exporter
 
-Exports all private channels the token is a member of from a Slack
-workspace in the official Slack export format (channels.json, users.json,
-and per-channel daily message files), then packages everything into a ZIP
-archive.
+Exports all public channels and all private channels the token is a member
+of from a Slack workspace in the official Slack export format (channels.json,
+users.json, and per-channel daily message files), then packages everything
+into a ZIP archive.
 
 Required OAuth token scopes:
+  channels:read    — list public channels
+  channels:history — read public channel message history
   groups:read      — list private channels the token is a member of
   groups:history   — read private channel message history
   users:read       — fetch workspace user list
@@ -117,7 +119,7 @@ class SlackExporter:
             for ch in self._paginate(
                 "conversations_list",
                 "channels",
-                types="private_channel",
+                types="private_channel,public_channel",
                 exclude_archived=False,
                 limit=200,
             ):
@@ -436,6 +438,8 @@ def main():
         parser.error(
             "No token supplied. Use --token or set the SLACK_TOKEN environment variable.\n\n"
             "Required OAuth scopes:\n"
+            "  channels:read    – list public channels\n"
+            "  channels:history – read public channel message history\n"
             "  groups:read      – list private channels the token is a member of\n"
             "  groups:history   – read private channel message history\n"
             "  users:read       – fetch user list\n"

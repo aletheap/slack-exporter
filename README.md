@@ -4,7 +4,7 @@
 
 # Slack Exporter
 
-Exports all private Slack channels your bot token is a member of in the [official Slack export format](https://slack.com/help/articles/201658943-Export-your-workspace-data), then packages everything into a ZIP archive.
+Exports all public Slack channels plus all private channels your bot token is a member of, in the [official Slack export format](https://slack.com/help/articles/201658943-Export-your-workspace-data), then packages everything into a ZIP archive.
 
 ## Output format
 
@@ -37,6 +37,8 @@ Create a [Slack app](https://api.slack.com/apps) and add a bot token with these 
 
 | Scope | Purpose |
 |-------|---------|
+| `channels:read` | List public channels |
+| `channels:history` | Read public channel message history |
 | `groups:read` | List private channels the bot is a member of |
 | `groups:history` | Read private channel message history |
 | `users:read` | Fetch workspace user list |
@@ -44,7 +46,7 @@ Create a [Slack app](https://api.slack.com/apps) and add a bot token with these 
 | `files:read` | Download file attachments |
 | `metadata.message:read` | Include structured message metadata |
 
-Install the app to your workspace, then invite the bot to each private channel you want to export (`/invite @your-bot`).
+Install the app to your workspace. Public channels are exported automatically. For private channels, invite the bot first (`/invite @your-bot`).
 
 ## Usage
 
