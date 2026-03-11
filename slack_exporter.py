@@ -395,12 +395,28 @@ def main():
     parser.add_argument(
         "--output",
         default=None,
-        help="Output directory (default: slack_export_YYYYMMDD_HHMMSS)",
+        help="Full path for the output directory (default: slack_export_YYYYMMDD_HHMMSS)",
+    )
+    parser.add_argument(
+        "--backup-dir",
+        default=None,
+        metavar="DIR",
+        help="Parent directory for backups; each run creates a timestamped subdirectory inside it",
     )
     parser.add_argument(
         "--no-files",
         action="store_true",
         help="Skip downloading file attachments (images, videos, PDFs, etc.)",
+    )
+    parser.add_argument(
+        "--html",
+        action="store_true",
+        help="Generate a browsable HTML viewer after the export completes",
+    )
+    parser.add_argument(
+        "--no-avatars",
+        action="store_true",
+        help="When used with --html, skip downloading user profile images",
     )
     parser.add_argument(
         "--list-channels",
@@ -440,7 +456,14 @@ def main():
         print(f"\n{len(channels)} channel(s)")
         return
 
-    output_dir = args.output or f"slack_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    if args.output and args.backup_dir:
+        parser.error("--output and --backup-dir are mutually exclusive.")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.backup_dir:
+        output_dir = str(Path(args.backup_dir) / f"slack_export_{timestamp}")
+    else:
+        output_dir = args.output or f"slack_export_{timestamp}"
     exporter = SlackExporter(
         token=args.token,
         output_dir=output_dir,
@@ -448,6 +471,19 @@ def main():
     )
     allowlist = set(args.channel) if args.channel else None
     exporter.export(allowlist=allowlist)
+
+    if args.html:
+        try:
+            from slack_html import SlackHTMLRenderer
+        except ImportError:
+            tqdm.write("    [warn] slack_html.py not found — skipping HTML generation.")
+        else:
+            renderer = SlackHTMLRenderer(
+                export_dir=exporter.out,
+                download_avatars=not args.no_avatars,
+            )
+            renderer.render()
+            print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")
 
 
 if __name__ == "__main__":
