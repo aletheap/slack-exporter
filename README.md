@@ -1,4 +1,5 @@
-# NOTE: Written entirely by Claude Code. Be Skeptical. YMMV
+> [!CAUTION]
+> **NOTE: Written entirely by Claude Code. Be Skeptical. YMMV**
 
 
 
