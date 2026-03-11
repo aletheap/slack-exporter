@@ -338,9 +338,9 @@ class SlackExporter:
 
             # Join public channels the bot isn't already in.
             # Archived channels can't be joined via the API, so we skip the
-            # join step and attempt to read their history directly — the
-            # channels:history scope allows reading archived public channel
-            # history without membership.
+            # join step. History will still be attempted; if the bot was never
+            # a member it will fail with a not_in_channel warning — there is
+            # no API-level workaround for that case with a bot token.
             if is_public and not was_member and not is_archived:
                 try:
                     self._call("conversations_join", channel=cid)
