@@ -113,7 +113,7 @@ class SlackExporter:
                 pbar.update(1)
         return users
 
-    def fetch_channels(self, allowlist: set = None):
+    def fetch_channels(self, allowlist: set = None, denylist: set = None):
         channels = []
         with tqdm(desc="Fetching channels", unit=" ch", leave=True) as pbar:
             for ch in self._paginate(
@@ -123,9 +123,12 @@ class SlackExporter:
                 exclude_archived=False,
                 limit=200,
             ):
-                if allowlist is None or ch["name"] in allowlist:
-                    channels.append(ch)
-                    pbar.update(1)
+                if allowlist is not None and ch["name"] not in allowlist:
+                    continue
+                if denylist and ch["name"] in denylist:
+                    continue
+                channels.append(ch)
+                pbar.update(1)
         return channels
 
     def fetch_members(self, channel_id: str):
@@ -298,7 +301,7 @@ class SlackExporter:
     # Main export
     # ------------------------------------------------------------------
 
-    def export(self, allowlist: set = None) -> Path:
+    def export(self, allowlist: set = None, denylist: set = None) -> Path:
         self.out.mkdir(parents=True, exist_ok=True)
 
         # 1. Users
@@ -312,7 +315,7 @@ class SlackExporter:
             self.download_emoji(emoji)
 
         # 3. Channels + messages
-        channels = self.fetch_channels(allowlist=allowlist)
+        channels = self.fetch_channels(allowlist=allowlist, denylist=denylist)
         if allowlist:
             missing = allowlist - {ch["name"] for ch in channels}
             if missing:
@@ -432,6 +435,13 @@ def main():
         metavar="NAME",
         help="Export only these channels (space-separated, e.g. --channel general engineering)",
     )
+    parser.add_argument(
+        "--skip-channel",
+        nargs="+",
+        default=None,
+        metavar="NAME",
+        help="Skip these channels (space-separated, e.g. --skip-channel random announcements)",
+    )
     args = parser.parse_args()
 
     if not args.token:
@@ -448,9 +458,13 @@ def main():
             "  metadata.message:read – include structured message metadata in history"
         )
 
+    if args.channel and args.skip_channel:
+        parser.error("--channel and --skip-channel are mutually exclusive.")
+
     if args.list_channels:
         exporter = SlackExporter(token=args.token)
-        channels = exporter.fetch_channels()
+        denylist = set(args.skip_channel) if args.skip_channel else None
+        channels = exporter.fetch_channels(denylist=denylist)
         print(f"{'ID':<12} {'Type':<8} {'Archived':<9} Name")
         print("-" * 60)
         for ch in sorted(channels, key=lambda c: c["name"]):
@@ -474,7 +488,8 @@ def main():
         download_files=not args.no_files,
     )
     allowlist = set(args.channel) if args.channel else None
-    exporter.export(allowlist=allowlist)
+    denylist = set(args.skip_channel) if args.skip_channel else None
+    exporter.export(allowlist=allowlist, denylist=denylist)
 
     if args.html:
         try:

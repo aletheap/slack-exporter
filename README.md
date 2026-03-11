@@ -69,6 +69,7 @@ python slack_exporter.py --token xoxb-...
 | `--output DIR` | Full path for the output directory (default: `slack_export_YYYYMMDD_HHMMSS`) |
 | `--backup-dir DIR` | Parent directory — each run creates a timestamped subdirectory inside it |
 | `--channel NAME [NAME ...]` | Export only these channels (space-separated) |
+| `--skip-channel NAME [NAME ...]` | Skip these channels (space-separated) |
 | `--no-files` | Skip downloading file attachments and emoji |
 | `--html` | Generate a browsable HTML viewer after export completes |
 | `--no-avatars` | When used with `--html`, skip downloading user profile images |
