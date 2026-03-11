@@ -344,6 +344,8 @@ class SlackExporter:
             self.download_emoji(emoji)
 
         # 3. Channels + messages
+
+        # --- pass 1: fetch channel list, join public channels as needed ---
         channels = self.fetch_channels(allowlist=allowlist, denylist=denylist)
         if allowlist:
             missing = allowlist - {ch["name"] for ch in channels}
@@ -352,48 +354,50 @@ class SlackExporter:
             if not channels:
                 print("Error: none of the specified channels were found or accessible.")
                 sys.exit(1)
-        # Write a preliminary channels.json before the export loop so the file
-        # exists and is readable even if the run is interrupted.  Members are
-        # not yet known, so they are left as empty lists; the file is
-        # overwritten with full member data once all channels are processed.
-        channels_meta = []
-        self._write_json(self.out / "channels.json",
-                         [self._format_channel(ch, []) for ch in channels])
 
-        ch_bar = tqdm(sorted(channels, key=lambda c: c["name"]), desc="Channels", unit=" ch")
-        for ch in ch_bar:
-            cid = ch["id"]
-            name = ch["name"]
+        # Join public channels the bot isn't already in.
+        # Archived channels cannot be joined, and conversations.unarchive
+        # also requires membership — so archived public channels the bot
+        # was never in cannot be exported via the Slack API with a bot
+        # token. Skip them with an explanation.
+        export_channels = []
+        for ch in sorted(channels, key=lambda c: c["name"]):
             is_public = not ch.get("is_private", False)
             was_member = ch.get("is_member", True)
-            ch_bar.set_postfix_str(f"#{name}")
-
-            is_archived = ch.get("is_archived", False)
-
-            # Join public channels the bot isn't already in.
-            # Archived channels cannot be joined, and conversations.unarchive
-            # also requires membership — so archived public channels the bot
-            # was never in cannot be exported via the Slack API with a bot
-            # token. Skip them with an explanation.
             if is_public and not was_member:
-                if is_archived:
+                if ch.get("is_archived", False):
                     tqdm.write(
-                        f"    [skip] #{name}: archived public channel the bot was never in "
+                        f"    [skip] #{ch['name']}: archived public channel the bot was never in "
                         f"(Slack API does not allow joining or unarchiving without prior membership)"
                     )
                     continue
                 try:
-                    self._call("conversations_join", channel=cid)
+                    self._call("conversations_join", channel=ch["id"])
                 except SlackApiError as exc:
                     tqdm.write(
-                        f"    [warn] #{name}: could not join ({exc.response['error']}), skipping"
+                        f"    [warn] #{ch['name']}: could not join ({exc.response['error']}), skipping"
                     )
                     continue
+            export_channels.append(ch)
 
-            members = self.fetch_members(cid, name)
-            channels_meta.append(self._format_channel(ch, members))
+        # --- pass 2: fetch all members upfront, then write channels.json ---
+        members_by_id: dict = {}
+        member_bar = tqdm(export_channels, desc="Fetching members", unit=" ch", leave=True)
+        for ch in member_bar:
+            member_bar.set_postfix_str(f"#{ch['name']}")
+            members_by_id[ch["id"]] = self.fetch_members(ch["id"], ch["name"])
 
-            # --- messages + thread replies ---
+        channels_meta = [self._format_channel(ch, members_by_id[ch["id"]])
+                         for ch in export_channels]
+        self._write_json(self.out / "channels.json", channels_meta)
+
+        # --- pass 3: export messages ---
+        ch_bar = tqdm(export_channels, desc="Channels", unit=" ch")
+        for ch in ch_bar:
+            cid = ch["id"]
+            name = ch["name"]
+            ch_bar.set_postfix_str(f"#{name}")
+
             messages = self.fetch_history(cid, name)
 
             seen_ts: set = {m["ts"] for m in messages}
@@ -435,8 +439,6 @@ class SlackExporter:
             ts = datetime.now().strftime("%H:%M:%S")
             n_files = len(self._collect_files(messages))
             tqdm.write(f"[{ts}] #{name} — {len(messages)} messages, {len(by_day)} days, {n_files} files")
-
-        self._write_json(self.out / "channels.json", channels_meta)
 
         # 4. ZIP archive
         zip_path = self.out.with_suffix(".zip")
