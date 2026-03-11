@@ -11,7 +11,6 @@ Required OAuth token scopes:
   channels:read    — list public channels
   channels:history — read public channel message history
   channels:join    — join public channels to read their history
-  channels:manage  — unarchive/re-archive public channels the bot was never in
   groups:read      — list private channels the token is a member of
   groups:history   — read private channel message history
   users:read       — fetch workspace user list
@@ -341,83 +340,62 @@ class SlackExporter:
             is_archived = ch.get("is_archived", False)
 
             # Join public channels the bot isn't already in.
-            # For archived channels: unarchive first (joining an archived
-            # channel is not allowed by the API), then join, then re-archive
-            # in a finally block so the channel is always restored.
-            need_rearchive = False
+            # Archived channels cannot be joined, and conversations.unarchive
+            # also requires membership — so archived public channels the bot
+            # was never in cannot be exported via the Slack API with a bot
+            # token. Skip them with an explanation.
             if is_public and not was_member:
                 if is_archived:
-                    try:
-                        self._call("conversations_unarchive", channel=cid)
-                        need_rearchive = True
-                    except SlackApiError as exc:
-                        tqdm.write(
-                            f"    [warn] could not unarchive #{name} "
-                            f"({exc.response['error']}), skipping"
-                        )
-                        continue
+                    tqdm.write(
+                        f"    [skip] #{name}: archived public channel the bot was never in "
+                        f"(Slack API does not allow joining or unarchiving without prior membership)"
+                    )
+                    continue
                 try:
                     self._call("conversations_join", channel=cid)
                 except SlackApiError as exc:
                     tqdm.write(
-                        f"    [warn] could not join #{name} "
-                        f"({exc.response['error']}), skipping"
+                        f"    [warn] #{name}: could not join ({exc.response['error']}), skipping"
                     )
-                    if need_rearchive:
-                        try:
-                            self._call("conversations_archive", channel=cid)
-                        except SlackApiError:
-                            pass
                     continue
 
-            try:
-                members = self.fetch_members(cid, name)
-                channels_meta.append(self._format_channel(ch, members))
+            members = self.fetch_members(cid, name)
+            channels_meta.append(self._format_channel(ch, members))
 
-                # --- messages + thread replies ---
-                messages = self.fetch_history(cid, name)
+            # --- messages + thread replies ---
+            messages = self.fetch_history(cid, name)
 
-                seen_ts: set = {m["ts"] for m in messages}
-                thread_parents = [
-                    m for m in messages
-                    if m.get("reply_count", 0) > 0
-                    and m.get("thread_ts") == m.get("ts")
-                ]
-                if thread_parents:
-                    for parent in tqdm(
-                        thread_parents,
-                        desc="  threads",
-                        unit=" thread",
-                        leave=False,
-                    ):
-                        for reply in self.fetch_replies(cid, parent["thread_ts"], name):
-                            if reply["ts"] not in seen_ts:
-                                messages.append(reply)
-                                seen_ts.add(reply["ts"])
+            seen_ts: set = {m["ts"] for m in messages}
+            thread_parents = [
+                m for m in messages
+                if m.get("reply_count", 0) > 0
+                and m.get("thread_ts") == m.get("ts")
+            ]
+            if thread_parents:
+                for parent in tqdm(
+                    thread_parents,
+                    desc="  threads",
+                    unit=" thread",
+                    leave=False,
+                ):
+                    for reply in self.fetch_replies(cid, parent["thread_ts"], name):
+                        if reply["ts"] not in seen_ts:
+                            messages.append(reply)
+                            seen_ts.add(reply["ts"])
 
-                # Sort all messages (oldest first) before grouping
-                messages.sort(key=lambda m: float(m.get("ts", 0)))
+            # Sort all messages (oldest first) before grouping
+            messages.sort(key=lambda m: float(m.get("ts", 0)))
 
-                # --- download attachments (patches local_path into message dicts) ---
-                ch_dir = self.out / name
-                ch_dir.mkdir(exist_ok=True)
-                if self.download_files:
-                    self.download_channel_files(messages, ch_dir)
+            # --- download attachments (patches local_path into message dicts) ---
+            ch_dir = self.out / name
+            ch_dir.mkdir(exist_ok=True)
+            if self.download_files:
+                self.download_channel_files(messages, ch_dir)
 
-                # --- write daily files (local_path fields already set above) ---
-                by_day = self._group_by_day(messages)
-                for day, day_msgs in by_day.items():
-                    self._write_json(ch_dir / f"{day}.json", day_msgs)
-
-            finally:
-                if need_rearchive:
-                    try:
-                        self._call("conversations_archive", channel=cid)
-                    except SlackApiError as exc:
-                        tqdm.write(
-                            f"    [warn] could not re-archive #{name}: "
-                            f"{exc.response['error']}"
-                        )
+            # --- write daily files (local_path fields already set above) ---
+            by_day = self._group_by_day(messages)
+            for day, day_msgs in by_day.items():
+                self._write_json(ch_dir / f"{day}.json", day_msgs)
 
         self._write_json(self.out / "channels.json", channels_meta)
 
@@ -501,7 +479,6 @@ def main():
             "  channels:read    – list public channels\n"
             "  channels:history – read public channel message history\n"
             "  channels:join    – join public channels to read their history\n"
-            "  channels:manage  – unarchive/re-archive public channels the bot was never in\n"
             "  groups:read      – list private channels the token is a member of\n"
             "  groups:history   – read private channel message history\n"
             "  users:read       – fetch user list\n"
