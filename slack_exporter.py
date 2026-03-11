@@ -63,10 +63,12 @@ except ImportError:
 class SlackExporter:
     """Exports a Slack workspace to the official export format."""
 
-    def __init__(self, token: str, output_dir: str = None, download_files: bool = True):
+    def __init__(self, token: str, output_dir: str = None, download_files: bool = True,
+                 download_avatars: bool = True):
         self.client = WebClient(token=token)
         self.out = Path(output_dir) if output_dir else None
         self.download_files = download_files
+        self.do_download_avatars = download_avatars
         # Reuse one session for all file downloads; auth header sent automatically.
         self._http = requests.Session()
         self._http.headers["Authorization"] = f"Bearer {token}"
@@ -256,6 +258,26 @@ class SlackExporter:
             bar.set_postfix_str(name[:40])
             self._download_file(url, dest)
 
+    def download_avatars(self, users: list):
+        """Download 72px profile images to avatars/<uid>.<ext> in the output dir."""
+        to_download = [
+            (u["id"], (u.get("profile") or {}).get("image_72") or
+                      (u.get("profile") or {}).get("image_48") or "")
+            for u in users if u.get("id")
+        ]
+        to_download = [(uid, url) for uid, url in to_download
+                       if url and "default_avatar" not in url]
+        if not to_download:
+            return
+        avatars_dir = self.out / "avatars"
+        avatars_dir.mkdir(exist_ok=True)
+        bar = tqdm(to_download, desc="Avatars", unit=" avatar", leave=True)
+        for uid, url in bar:
+            ext = Path(url.split("?")[0]).suffix or ".png"
+            dest = avatars_dir / f"{uid}{ext}"
+            bar.set_postfix_str(uid)
+            self._download_file(url, dest)
+
     # ------------------------------------------------------------------
     # Formatting helpers
     # ------------------------------------------------------------------
@@ -311,6 +333,8 @@ class SlackExporter:
         # 1. Users
         users = self.fetch_users()
         self._write_json(self.out / "users.json", users)
+        if self.do_download_avatars:
+            self.download_avatars(users)
 
         # 2. Custom emoji
         emoji = self.fetch_emoji()
@@ -453,7 +477,7 @@ def main():
     parser.add_argument(
         "--no-avatars",
         action="store_true",
-        help="When used with --html, skip downloading user profile images",
+        help="Skip downloading user profile images",
     )
     parser.add_argument(
         "--list-channels",
@@ -520,6 +544,7 @@ def main():
         token=args.token,
         output_dir=output_dir,
         download_files=not args.no_files,
+        download_avatars=not args.no_avatars,
     )
     allowlist = set(args.channel) if args.channel else None
     denylist = set(args.skip_channel) if args.skip_channel else None
@@ -533,7 +558,6 @@ def main():
         else:
             renderer = SlackHTMLRenderer(
                 export_dir=exporter.out,
-                download_avatars=not args.no_avatars,
             )
             renderer.render()
             print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")

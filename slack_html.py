@@ -8,7 +8,6 @@ file attachments.
 
 Usage:
   python slack_html.py <export_dir>
-  python slack_html.py <export_dir> --no-avatars
   python slack_html.py <export_dir> --channel engineering --channel general
 """
 
@@ -21,12 +20,6 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-
-try:
-    import requests
-except ImportError:
-    print("Error: requests not installed.  Run: pip install requests")
-    sys.exit(1)
 
 try:
     from tqdm import tqdm
@@ -446,20 +439,15 @@ class SlackHTMLRenderer:
     def __init__(
         self,
         export_dir: Path,
-        download_avatars: bool = True,
         channel_filter: set = None,
     ):
         self.export_dir = Path(export_dir)
-        self.do_download_avatars = download_avatars
         self.channel_filter = channel_filter
         self.html_dir = self.export_dir / "html"
 
         self.users: dict = {}    # uid → user object
         self.channels: list = []
         self.emoji: dict = {}    # name → url or "alias:name"
-
-        self._http = requests.Session()
-        self._http.headers["User-Agent"] = "slack-html-renderer/1.0"
 
     # ------------------------------------------------------------------
     # Data loading
@@ -495,38 +483,12 @@ class SlackHTMLRenderer:
     # Avatars
     # ------------------------------------------------------------------
 
-    def download_avatars(self):
-        """Download 72px profile images to html/avatars/<uid>.<ext>."""
-        avatars_dir = self.html_dir / "avatars"
-        avatars_dir.mkdir(parents=True, exist_ok=True)
-
-        to_download = [
-            (uid, user.get("profile", {}).get("image_72") or
-                  user.get("profile", {}).get("image_48") or "")
-            for uid, user in self.users.items()
-        ]
-        to_download = [(uid, url) for uid, url in to_download
-                       if url and "default_avatar" not in url]
-
-        bar = tqdm(to_download, desc="Downloading avatars", unit=" avatar", leave=True)
-        for uid, url in bar:
-            ext = Path(url.split("?")[0]).suffix or ".png"
-            dest = avatars_dir / f"{uid}{ext}"
-            if dest.exists():
-                continue
-            try:
-                resp = self._http.get(url, timeout=10)
-                resp.raise_for_status()
-                dest.write_bytes(resp.content)
-            except Exception as exc:
-                tqdm.write(f"    [warn] avatar {uid}: {exc}")
-
     def _avatar_src(self, user_id: str) -> str:
         """Return the src attribute value for an avatar <img>."""
-        avatars_dir = self.html_dir / "avatars"
+        avatars_dir = self.export_dir / "avatars"
         for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
             if (avatars_dir / f"{user_id}{ext}").exists():
-                return f"avatars/{user_id}{ext}"
+                return f"../avatars/{user_id}{ext}"
         return _placeholder_avatar(self._display_name(user_id))
 
     def _display_name(self, user_id: str) -> str:
@@ -1483,9 +1445,6 @@ img.emoji { width: 20px; height: 20px; vertical-align: -4px; display: inline; }
         self.load_channels()
         self.load_emoji()
 
-        if self.do_download_avatars:
-            self.download_avatars()
-
         self.write_stylesheet()
 
         # Index page
@@ -1525,11 +1484,6 @@ def main():
         help="Path to the Slack export directory (must contain users.json)",
     )
     parser.add_argument(
-        "--no-avatars",
-        action="store_true",
-        help="Skip downloading user profile images",
-    )
-    parser.add_argument(
         "--channel",
         nargs="+",
         metavar="NAME",
@@ -1551,7 +1505,6 @@ def main():
 
     renderer = SlackHTMLRenderer(
         export_dir=export_dir,
-        download_avatars=not args.no_avatars,
         channel_filter=set(args.channel) if args.channel else None,
     )
     renderer.render()
