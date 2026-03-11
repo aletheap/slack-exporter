@@ -397,6 +397,9 @@ class SlackExporter:
             for day, day_msgs in by_day.items():
                 self._write_json(ch_dir / f"{day}.json", day_msgs)
 
+            ts = datetime.now().strftime("%H:%M:%S")
+            tqdm.write(f"[{ts}] #{name} — {len(messages)} messages, {len(by_day)} days")
+
         self._write_json(self.out / "channels.json", channels_meta)
 
         # 4. ZIP archive
