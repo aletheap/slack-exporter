@@ -494,12 +494,13 @@ def main():
         exporter = SlackExporter(token=args.token)
         denylist = set(args.skip_channel) if args.skip_channel else None
         channels = exporter.fetch_channels(denylist=denylist)
-        print(f"{'ID':<12} {'Type':<8} {'Archived':<9} Name")
-        print("-" * 60)
+        print(f"{'ID':<12} {'TYPE':<8} {'MEMBER':<11} {'STATUS':<9} NAME")
+        print("-" * 70)
         for ch in sorted(channels, key=lambda c: c["name"]):
-            archived = "yes" if ch.get("is_archived") else ""
-            ch_type = "private" if ch.get("is_private") else "public"
-            print(f"{ch['id']:<12} {ch_type:<8} {archived:<9} #{ch['name']}")
+            ch_type  = "private"    if ch.get("is_private")  else "public"
+            member   = "member"     if ch.get("is_member")   else "non-member"
+            status   = "archived"   if ch.get("is_archived") else "active"
+            print(f"{ch['id']:<12} {ch_type:<8} {member:<11} {status:<9} #{ch['name']}")
         print(f"\n{len(channels)} channel(s)")
         return
 
