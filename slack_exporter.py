@@ -349,6 +349,12 @@ class SlackExporter:
 
         # --- pass 1: fetch channel list, join public channels as needed ---
         channels = self.fetch_channels(allowlist=allowlist, denylist=denylist)
+        # Private channels are excluded by default; include them only when
+        # explicitly named via --channel.
+        channels = [
+            ch for ch in channels
+            if not ch.get("is_private") or (allowlist and ch["name"] in allowlist)
+        ]
         if allowlist:
             missing = allowlist - {ch["name"] for ch in channels}
             if missing:
@@ -504,7 +510,7 @@ def main():
         nargs="+",
         default=None,
         metavar="NAME",
-        help="Export only these channels (space-separated, e.g. --channel general engineering)",
+        help="Export only these channels (space-separated). Private channels are excluded by default; name them here to include them.",
     )
     parser.add_argument(
         "--skip-channel",
