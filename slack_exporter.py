@@ -242,14 +242,14 @@ class SlackExporter:
         result = self._call("emoji_list")
         return result.get("emoji", {})
 
-    def download_emoji(self, emoji: dict):
+    def download_emoji(self, emoji: dict, out_dir: Path = None):
         """Download all non-alias custom emoji images to __emoji/ in the output dir."""
         # Aliases point to other emoji names ("alias:other-name"), not URLs.
         to_download = {name: url for name, url in emoji.items()
                        if not url.startswith("alias:")}
         if not to_download:
             return
-        emoji_dir = self.out / "__emoji"
+        emoji_dir = (out_dir or self.out) / "__emoji"
         emoji_dir.mkdir(exist_ok=True)
         bar = tqdm(to_download.items(), desc="Emoji", unit=" emoji", leave=True)
         for name, url in bar:
@@ -258,7 +258,7 @@ class SlackExporter:
             bar.set_postfix_str(name[:40])
             self._download_file(url, dest)
 
-    def download_avatars(self, users: list):
+    def download_avatars(self, users: list, out_dir: Path = None):
         """Download 72px profile images to __avatars/<uid>.<ext> in the output dir."""
         to_download = [
             (u["id"], (u.get("profile") or {}).get("image_72") or
@@ -269,7 +269,7 @@ class SlackExporter:
                        if url and "default_avatar" not in url]
         if not to_download:
             return
-        avatars_dir = self.out / "__avatars"
+        avatars_dir = (out_dir or self.out) / "__avatars"
         avatars_dir.mkdir(exist_ok=True)
         bar = tqdm(to_download, desc="Avatars", unit=" avatar", leave=True)
         for uid, url in bar:
@@ -330,18 +330,20 @@ class SlackExporter:
 
     def export(self, allowlist: set = None, denylist: set = None) -> Path:
         self.out.mkdir(parents=True, exist_ok=True)
+        raw = self.out / "raw_export"
+        raw.mkdir(parents=True, exist_ok=True)
 
         # 1. Users
         users = self.fetch_users()
-        self._write_json(self.out / "users.json", users)
+        self._write_json(raw / "users.json", users)
         if self.do_download_avatars:
-            self.download_avatars(users)
+            self.download_avatars(users, raw)
 
         # 2. Custom emoji
         emoji = self.fetch_emoji()
-        self._write_json(self.out / "emoji.json", emoji)
+        self._write_json(raw / "emoji.json", emoji)
         if self.download_files:
-            self.download_emoji(emoji)
+            self.download_emoji(emoji, raw)
 
         # 3. Channels + messages
 
@@ -389,7 +391,7 @@ class SlackExporter:
 
         channels_meta = [self._format_channel(ch, members_by_id[ch["id"]])
                          for ch in export_channels]
-        self._write_json(self.out / "channels.json", channels_meta)
+        self._write_json(raw / "channels.json", channels_meta)
 
         # --- pass 3: export messages ---
         ch_bar = tqdm(export_channels, desc="Channels", unit=" ch")
@@ -424,9 +426,9 @@ class SlackExporter:
             # --- download attachments (patches local_path into message dicts) ---
             is_private = ch.get("is_private", False)
             if is_private:
-                ch_dir = self.out / "_private_channels" / name
+                ch_dir = raw / "_private_channels" / name
             else:
-                ch_dir = self.out / name
+                ch_dir = raw / name
             ch_dir.mkdir(parents=True, exist_ok=True)
             if self.download_files:
                 self.download_channel_files(messages, ch_dir)
@@ -570,10 +572,10 @@ def main():
             tqdm.write("    [warn] slack_html.py not found — skipping HTML generation.")
         else:
             renderer = SlackHTMLRenderer(
-                export_dir=exporter.out,
+                export_dir=exporter.out / "raw_export",
             )
             renderer.render()
-            print(f"  HTML      : {exporter.out / '_html' / 'index.html'}")
+            print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")
 
 
 if __name__ == "__main__":

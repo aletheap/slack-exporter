@@ -443,7 +443,7 @@ class SlackHTMLRenderer:
     ):
         self.export_dir = Path(export_dir)
         self.channel_filter = channel_filter
-        self.html_dir = self.export_dir / "_html"
+        self.html_dir = self.export_dir.parent / "html"
 
         self.users: dict = {}    # uid → user object
         self.channels: list = []
@@ -492,7 +492,7 @@ class SlackHTMLRenderer:
         avatars_dir = self.export_dir / "__avatars"
         for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
             if (avatars_dir / f"{user_id}{ext}").exists():
-                return f"../__avatars/{user_id}{ext}"
+                return f"../raw_export/__avatars/{user_id}{ext}"
         return _placeholder_avatar(self._display_name(user_id))
 
     def _display_name(self, user_id: str) -> str:
@@ -527,7 +527,7 @@ class SlackHTMLRenderer:
         if emoji_dir.exists():
             for ext in (".png", ".gif", ".jpg", ".jpeg", ".webp"):
                 if (emoji_dir / f"{canonical}{ext}").exists():
-                    src = f"../__emoji/{canonical}{ext}"
+                    src = f"../raw_export/__emoji/{canonical}{ext}"
                     return (
                         f'<img class="emoji" src="{src}" '
                         f'alt=":{safe_name}:" title=":{safe_name}:">'
@@ -715,13 +715,13 @@ class SlackHTMLRenderer:
             local_path = f.get("local_path")
 
             if local_path:
-                # Path from _html/<channel>.html → ../<channel-dir>/_files/<file>
+                # Path from html/<channel>.html → ../raw_export/<channel-dir>/_files/<file>
                 ch_dir = (
                     f"_private_channels/{html.escape(channel_name)}"
                     if is_private
                     else html.escape(channel_name)
                 )
-                src = f"../{ch_dir}/{html.escape(local_path)}"
+                src = f"../raw_export/{ch_dir}/{html.escape(local_path)}"
                 href = src
             else:
                 url = f.get("url_private") or ""
@@ -1506,6 +1506,9 @@ def main():
     if not export_dir.is_dir():
         print(f"Error: '{export_dir}' is not a directory.", file=sys.stderr)
         sys.exit(1)
+    # Accept either the root export dir or the raw_export subdirectory directly.
+    if not (export_dir / "users.json").exists() and (export_dir / "raw_export" / "users.json").exists():
+        export_dir = export_dir / "raw_export"
     if not (export_dir / "users.json").exists():
         print(
             f"Error: '{export_dir}' doesn't look like a Slack export "
