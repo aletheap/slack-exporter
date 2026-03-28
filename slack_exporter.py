@@ -485,21 +485,6 @@ def main():
         help="Parent directory for backups; each run creates a timestamped subdirectory inside it",
     )
     parser.add_argument(
-        "--no-files",
-        action="store_true",
-        help="Skip downloading file attachments (images, videos, PDFs, etc.)",
-    )
-    parser.add_argument(
-        "--no-html",
-        action="store_true",
-        help="Skip generating the browsable HTML viewer after export",
-    )
-    parser.add_argument(
-        "--no-avatars",
-        action="store_true",
-        help="Skip downloading user profile images",
-    )
-    parser.add_argument(
         "--list-channels",
         action="store_true",
         help="Print accessible channels and exit without exporting",
@@ -563,24 +548,23 @@ def main():
     exporter = SlackExporter(
         token=args.token,
         output_dir=output_dir,
-        download_files=not args.no_files,
-        download_avatars=not args.no_avatars,
+        download_files=True,
+        download_avatars=True,
     )
     allowlist = set(args.channel) if args.channel else None
     denylist = set(args.skip_channel) if args.skip_channel else None
     exporter.export(allowlist=allowlist, denylist=denylist)
 
-    if not args.no_html:
-        try:
-            from slack_html import SlackHTMLRenderer
-        except ImportError:
-            tqdm.write("    [warn] slack_html.py not found — skipping HTML generation.")
-        else:
-            renderer = SlackHTMLRenderer(
-                export_dir=exporter.out / "raw_export",
-            )
-            renderer.render()
-            print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")
+    try:
+        from slack_html import SlackHTMLRenderer
+    except ImportError:
+        tqdm.write("    [warn] slack_html.py not found — skipping HTML generation.")
+    else:
+        renderer = SlackHTMLRenderer(
+            export_dir=exporter.out / "raw_export",
+        )
+        renderer.render()
+        print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")
 
     zip_path = exporter.create_zip()
     print(f"\nDone.")
