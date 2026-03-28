@@ -325,7 +325,8 @@ class SlackExporter:
     # Main export
     # ------------------------------------------------------------------
 
-    def export(self, allowlist: set = None, denylist: set = None) -> Path:
+    def export(self, allowlist: set = None, denylist: set = None,
+               exclude_private: bool = False) -> Path:
         self.out.mkdir(parents=True, exist_ok=True)
         raw = self.out / "raw_export"
         raw.mkdir(parents=True, exist_ok=True)
@@ -344,12 +345,11 @@ class SlackExporter:
 
         # --- pass 1: fetch channel list, join public channels as needed ---
         channels = self.fetch_channels(allowlist=allowlist, denylist=denylist)
-        # Private channels are excluded by default; include them only when
-        # explicitly named via --channel.
-        channels = [
-            ch for ch in channels
-            if not ch.get("is_private") or (allowlist and ch["name"] in allowlist)
-        ]
+        if exclude_private:
+            channels = [
+                ch for ch in channels
+                if not ch.get("is_private") or (allowlist and ch["name"] in allowlist)
+            ]
         if allowlist:
             missing = allowlist - {ch["name"] for ch in channels}
             if missing:
@@ -488,7 +488,12 @@ def main():
         nargs="+",
         default=None,
         metavar="NAME",
-        help="Export only these channels (space-separated). Private channels are excluded by default; name them here to include them.",
+        help="Export only these channels (space-separated).",
+    )
+    parser.add_argument(
+        "--exclude-private-channels",
+        action="store_true",
+        help="Skip private channels (unless explicitly named via --channel)",
     )
     parser.add_argument(
         "--skip-channel",
@@ -545,7 +550,8 @@ def main():
     )
     allowlist = set(args.channel) if args.channel else None
     denylist = set(args.skip_channel) if args.skip_channel else None
-    exporter.export(allowlist=allowlist, denylist=denylist)
+    exporter.export(allowlist=allowlist, denylist=denylist,
+                    exclude_private=args.exclude_private_channels)
 
     try:
         from slack_html import SlackHTMLRenderer
