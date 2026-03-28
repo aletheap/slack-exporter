@@ -63,12 +63,9 @@ except ImportError:
 class SlackExporter:
     """Exports a Slack workspace to the official export format."""
 
-    def __init__(self, token: str, output_dir: str = None, download_files: bool = True,
-                 download_avatars: bool = True):
+    def __init__(self, token: str, output_dir: str = None):
         self.client = WebClient(token=token)
         self.out = Path(output_dir) if output_dir else None
-        self.download_files = download_files
-        self.do_download_avatars = download_avatars
         # Reuse one session for all file downloads; auth header sent automatically.
         self._http = requests.Session()
         self._http.headers["Authorization"] = f"Bearer {token}"
@@ -336,14 +333,12 @@ class SlackExporter:
         # 1. Users
         users = self.fetch_users()
         self._write_json(raw / "users.json", users)
-        if self.do_download_avatars:
-            self.download_avatars(users, raw)
+        self.download_avatars(users, raw)
 
         # 2. Custom emoji
         emoji = self.fetch_emoji()
         self._write_json(raw / "emoji.json", emoji)
-        if self.download_files:
-            self.download_emoji(emoji, raw)
+        self.download_emoji(emoji, raw)
 
         # 3. Channels + messages
 
@@ -436,8 +431,7 @@ class SlackExporter:
             else:
                 ch_dir = raw / name
             ch_dir.mkdir(parents=True, exist_ok=True)
-            if self.download_files:
-                self.download_channel_files(messages, ch_dir)
+            self.download_channel_files(messages, ch_dir)
 
             # --- write daily files (local_path fields already set above) ---
             by_day = self._group_by_day(messages)
@@ -548,8 +542,6 @@ def main():
     exporter = SlackExporter(
         token=args.token,
         output_dir=output_dir,
-        download_files=True,
-        download_avatars=True,
     )
     allowlist = set(args.channel) if args.channel else None
     denylist = set(args.skip_channel) if args.skip_channel else None
