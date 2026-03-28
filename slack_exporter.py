@@ -448,16 +448,15 @@ class SlackExporter:
             n_files = len(self._collect_files(messages))
             tqdm.write(f"[{ts}] #{name} — {len(messages)} messages, {len(by_day)} days, {n_files} files")
 
-        # 4. ZIP archive
+        return self.out
+
+    def create_zip(self) -> Path:
+        """Zip the entire export directory (html + raw_export) into a single archive."""
         zip_path = self.out.with_suffix(".zip")
         all_files = [fp for fp in sorted(self.out.rglob("*")) if fp.is_file()]
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for fp in tqdm(all_files, desc="Zipping", unit=" file"):
                 zf.write(fp, fp.relative_to(self.out.parent))
-
-        print(f"\nDone.")
-        print(f"  Directory : {self.out}")
-        print(f"  Archive   : {zip_path}")
         return zip_path
 
 
@@ -582,6 +581,11 @@ def main():
             )
             renderer.render()
             print(f"  HTML      : {exporter.out / 'html' / 'index.html'}")
+
+    zip_path = exporter.create_zip()
+    print(f"\nDone.")
+    print(f"  Directory : {exporter.out}")
+    print(f"  Archive   : {zip_path}")
 
 
 if __name__ == "__main__":
